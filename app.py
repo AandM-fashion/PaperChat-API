@@ -40,7 +40,7 @@ qdrant_client = QdrantClient(
 )
 
 groq_api_key = os.getenv("GROQ_API_KEY")
-groq_chat = ChatGroq(temperature=0.7, groq_api_key=groq_api_key, model_name="mixtral-8x7b-32768")
+groq_chat = ChatGroq(temperature=0.7, groq_api_key=groq_api_key, model_name="llama3-70b-8192")
 
 
 @app.post("/upload/")
@@ -104,11 +104,9 @@ async def query_database(request: QueryRequest):
         context += result.payload["text"] + "\n"
 
     async def response_generator():
-        system_message = "You are a question-answering assistant. You are given relevant context. Answer only in Markdown format. Use newlines, Use backticks for code. Do not mention markdown or code anywhere. Only answer what is asked and keep it concise."
+        system_message = "You are a question-answering assistant. You are given relevant context. "
         human_message = f"""### Question: {request.query}
-        ### Context: {context}
-        !!! Remember to answer in markdown format
-        ### Answer:"""
+        ### Context: {context}"""
 
         prompt = ChatPromptTemplate.from_messages([("system", system_message), ("human", human_message)])
         chain = prompt | groq_chat
