@@ -40,7 +40,7 @@ qdrant_client = QdrantClient(
 )
 
 groq_api_key = os.getenv("GROQ_API_KEY")
-groq_chat = ChatGroq(temperature=0.7, groq_api_key=groq_api_key, model_name="llama3-70b-8192")
+groq_chat = ChatGroq(temperature=0.7, groq_api_key=groq_api_key, model_name="mixtral-8x7b-32768")
 
 
 @app.post("/upload/")
@@ -80,7 +80,13 @@ def store_embeddings_in_qdrant(collection_name, text_chunks, embeddings):
     for i, embedding in enumerate(embeddings, start=1):
         points.append(PointStruct(id=i, vector=embedding, payload={"text": text_chunks[i - 1]}))
 
-    qdrant_client.recreate_collection(
+    try:
+        qdrant_client.get_collection(collection_name)
+        qdrant_client.delete_collection(collection_name)
+    except Exception:
+        pass
+
+    qdrant_client.create_collection(
         collection_name=collection_name,
         vectors_config=vectors_config,
     )
@@ -91,7 +97,6 @@ def store_embeddings_in_qdrant(collection_name, text_chunks, embeddings):
 class QueryRequest(BaseModel):
     collection_name: str
     query: str
-
 
 @app.post("/query/")
 async def query_database(request: QueryRequest):
@@ -104,9 +109,11 @@ async def query_database(request: QueryRequest):
         context += result.payload["text"] + "\n"
 
     async def response_generator():
-        system_message = "You are a question-answering assistant. You are given relevant context. "
+        system_message = "You are a question-answering assistant. You are given relevant context. Answer only in Markdown format. Use newlines, Use backticks for code. Do not mention markdown or code anywhere. Only answer what is asked and keep it concise."
         human_message = f"""### Question: {request.query}
-        ### Context: {context}"""
+        ### Context: {context}
+        !!! Remember to answer in markdown format
+        ### Answer:"""
 
         prompt = ChatPromptTemplate.from_messages([("system", system_message), ("human", human_message)])
         chain = prompt | groq_chat
@@ -118,4 +125,5 @@ async def query_database(request: QueryRequest):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=os.getenv('PORT'))
+    port = int(os.getenv('PORT', 8000)) 
+    uvicorn.run(app, host="0.0.0.0", port=port)
